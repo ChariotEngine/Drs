@@ -6,9 +6,9 @@ version = "0.1.1"
 keywords = ["drs", "aoe", "empires", "genie", "engine"]
 authors = ["Taryn Hill <taryn@phrohdoh.com>", "Kevin Fuller <angered.ghandi@gmail.com>"]
 documentation = "https://docs.rs/chariot_drs/"
-repository = "https://github.com/ChariotEngine/Chariot"
+repository = "https://github.com/ChariotEngine/Drs"
 readme = "README.md"
 
 [dependencies]
 error-chain = "0.5"
-chariot_io_tools = "0.1.0"
+chariot_io_tools = "0.1"
