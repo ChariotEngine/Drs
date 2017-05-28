@@ -23,18 +23,43 @@
 use error::*;
 
 use chariot_io_tools::ReadExt;
+
+use either::Either;
+
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
-
 use std::path::Path;
+use std::io::Seek;
+use std::io::SeekFrom;
 
-const EXPECTED_COPYRIGHT: &'static str = "Copyright (c) 1997 Ensemble Studios.\u{1A}";
-const EXPECTED_VERSION: &'static str = "1.00";
-const EXPECTED_TYPE: &'static str = "tribe";
+const EXPECTED_AOE_COPYRIGHT: &'static str = "Copyright (c) 1997 Ensemble Studios.\u{1A}";
+const EXPECTED_AOE_VERSION: &'static str = "1.00";
+const EXPECTED_AOE_TYPE: &'static str = "tribe";
+
+const AOE_COPYRIGHT_LEN: usize = 40;
+type AoeCopyright = [u8; AOE_COPYRIGHT_LEN];
+const AOE_COPYRIGHT_EMPTY: AoeCopyright = [0u8; AOE_COPYRIGHT_LEN];
+
+const EXPECTED_SWBG_COPYRIGHT: &'static str = "Copyright (c) 2001 LucasArts Entertainment Company LLC\u{1A}";
+const EXPECTED_SWBG_VERSION: &'static str = "1.00";
+const EXPECTED_SWBG_TYPE: &'static str = "swbg";
+
+const SWBG_COPYRIGHT_LEN: usize = 60;
+type SwbgCopyright = [u8; SWBG_COPYRIGHT_LEN];
+const SWBG_COPYRIGHT_EMPTY: SwbgCopyright = [0u8; SWBG_COPYRIGHT_LEN];
+
+type DrsCopyrightType = Either<AoeCopyright, SwbgCopyright>;
+
+pub enum DrsGameType {
+    /// Age of Empires
+    AOE,
+    /// Star Wars Galactic Battlegrounds
+    SWBG,
+}
 
 pub struct DrsHeader {
-    pub copyright_info: [u8; 40],
+    pub copyright_info: DrsCopyrightType,
     pub file_version: [u8; 4],
     pub file_type: [u8; 12],
     pub table_count: u32,
@@ -42,9 +67,11 @@ pub struct DrsHeader {
 }
 
 impl DrsHeader {
-    pub fn new() -> DrsHeader {
+    /// Notes:
+    /// - copyright_info defaults to Either::Left (which is AOE)
+    pub fn empty() -> DrsHeader {
         DrsHeader {
-            copyright_info: [0u8; 40],
+            copyright_info: Either::Left(AOE_COPYRIGHT_EMPTY),
             file_version: [0u8; 4],
             file_type: [0u8; 12],
             table_count: 0,
@@ -52,19 +79,71 @@ impl DrsHeader {
         }
     }
 
+    pub fn game_type(&self) -> DrsGameType {
+        match self.copyright_info {
+            Either::Left(_) => DrsGameType::AOE,
+            Either::Right(_) => DrsGameType::SWBG,
+        }
+    }
+
     // TODO: Implement writing
 
-    fn read_from_file(file: &mut File, file_name: &Path) -> Result<DrsHeader> {
-        let mut header = DrsHeader::new();
-        try!(file.read_exact(&mut header.copyright_info));
-        try!(file.read_exact(&mut header.file_version));
-        try!(file.read_exact(&mut header.file_type));
-        header.table_count = try!(file.read_u32());
-        header.file_offset = try!(file.read_u32());
+    pub fn read_from_file(file: &mut File, file_name: &Path) -> Result<DrsHeader> {
+        file.seek(SeekFrom::Start(64))?;
+        let mut type_str_buf = [0u8; 4];
+        try!(file.read_exact(&mut type_str_buf));
+        file.seek(SeekFrom::Start(0))?;
+        let type_str = ::std::str::from_utf8(&type_str_buf[..]).expect(&format!("Non-UTF8 file type: {:?}", type_str_buf));
 
-        try!(validate_str(file_name, &header.copyright_info[..], EXPECTED_COPYRIGHT));
-        try!(validate_str(file_name, &header.file_version[..], EXPECTED_VERSION));
-        try!(validate_str(file_name, &header.file_type[..], EXPECTED_TYPE));
+        let game_type = if type_str.trim() == "swbg" {
+            DrsGameType::SWBG
+        } else {
+            DrsGameType::AOE
+        };
+
+        let copyright_info = match game_type {
+            DrsGameType::AOE => {
+                let mut buf = AOE_COPYRIGHT_EMPTY;
+                try!(file.read_exact(&mut buf));
+                Either::Left(buf)
+            },
+            DrsGameType::SWBG => {
+                let mut buf = SWBG_COPYRIGHT_EMPTY;
+                try!(file.read_exact(&mut buf));
+                Either::Right(buf)
+            }
+        };
+
+        let mut file_version = [0u8; 4];
+        try!(file.read_exact(&mut file_version));
+
+        let mut file_type = [0u8; 12];
+        try!(file.read_exact(&mut file_type));
+
+        let table_count = try!(file.read_u32());
+        let file_offset = try!(file.read_u32());
+
+        match game_type {
+            DrsGameType::AOE => {
+                try!(validate_str(file_name, &copyright_info.left().unwrap()[..], EXPECTED_AOE_COPYRIGHT));
+                try!(validate_str(file_name, &file_version[..], EXPECTED_AOE_VERSION));
+                try!(validate_str(file_name, &file_type[..], EXPECTED_AOE_TYPE));
+            },
+            DrsGameType::SWBG => {
+                try!(validate_str(file_name, &copyright_info.right().unwrap()[..], EXPECTED_SWBG_COPYRIGHT));
+                try!(validate_str(file_name, &file_version[..], EXPECTED_SWBG_VERSION));
+                try!(validate_str(file_name, &file_type[..], EXPECTED_SWBG_TYPE));
+            }
+        }
+
+        let header = DrsHeader {
+            copyright_info: copyright_info,
+            file_version: file_version,
+            file_type: file_type,
+            table_count: table_count,
+            file_offset: file_offset,
+        };
+
         Ok(header)
     }
 }
@@ -210,9 +289,9 @@ pub struct DrsFile {
 }
 
 impl DrsFile {
-    pub fn new() -> DrsFile {
+    pub fn empty() -> DrsFile {
         DrsFile {
-            header: DrsHeader::new(),
+            header: DrsHeader::empty(),
             tables: Vec::new(),
         }
     }
@@ -233,7 +312,7 @@ impl DrsFile {
         let file_name = file_name.as_ref();
         let mut file = try!(File::open(file_name));
 
-        let mut drs_file = DrsFile::new();
+        let mut drs_file = DrsFile::empty();
         drs_file.header = try!(DrsHeader::read_from_file(&mut file, file_name));
         try!(DrsFile::read_table_headers(&mut file, &mut drs_file));
         try!(DrsFile::read_file_entry_headers(&mut file, &mut drs_file));

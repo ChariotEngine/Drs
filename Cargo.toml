@@ -1,14 +1,15 @@
 [package]
-name = "chariot_drs"
-description = "A library for reading/writing Age of Empires (1997) DRS files"
-license = "MIT"
-version = "0.1.1"
-keywords = ["drs", "aoe", "empires", "genie", "engine"]
 authors = ["Taryn Hill <taryn@phrohdoh.com>", "Kevin Fuller <angered.ghandi@gmail.com>"]
+description = "A library for reading/writing Age of Empires (1997) DRS files"
 documentation = "https://docs.rs/chariot_drs/"
-repository = "https://github.com/ChariotEngine/Drs"
+keywords = ["drs", "aoe", "empires", "genie", "engine"]
+license = "MIT"
+name = "chariot_drs"
 readme = "README.md"
+repository = "https://github.com/ChariotEngine/Drs"
+version = "0.1.2"
 
 [dependencies]
-error-chain = "0.5"
 chariot_io_tools = "0.1"
+error-chain = "0.5"
+either = "1.1"

@@ -26,6 +26,7 @@
 extern crate error_chain;
 
 extern crate chariot_io_tools;
+extern crate either;
 
 mod drs;
 mod error;
