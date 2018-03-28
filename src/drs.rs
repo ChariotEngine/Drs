@@ -223,6 +223,7 @@ pub struct DrsTableEntry {
     pub file_id: u32,
     pub file_offset: u32,
     pub file_size: u32,
+    pub file_type: DrsFileType,
 }
 
 impl DrsTableEntry {
@@ -231,16 +232,18 @@ impl DrsTableEntry {
             file_id: 0u32,
             file_offset: 0u32,
             file_size: 0u32,
+            file_type: DrsFileType::Binary,
         }
     }
 
     // TODO: Implement writing
 
-    fn read_from_file<R: Read>(file: &mut R) -> Result<DrsTableEntry> {
+    fn read_from_file<R: Read>(file: &mut R, file_type: DrsFileType) -> Result<DrsTableEntry> {
         let mut entry = DrsTableEntry::new();
         entry.file_id = try!(file.read_u32());
         entry.file_offset = try!(file.read_u32());
         entry.file_size = try!(file.read_u32());
+        entry.file_type = file_type;
         Ok(entry)
     }
 }
@@ -336,7 +339,8 @@ impl DrsFile {
     fn read_file_entry_headers<R: Read>(file: &mut R, drs_file: &mut DrsFile) -> Result<()> {
         for table_index in 0..drs_file.header.table_count {
             for _file_index in 0..drs_file.tables[table_index as usize].header.file_count {
-                let table_entry = try!(DrsTableEntry::read_from_file(file));
+                let file_type = drs_file.tables[table_index as usize].header.file_type;
+                let table_entry = try!(DrsTableEntry::read_from_file(file, file_type));
                 drs_file.tables[table_index as usize].entries.push(table_entry);
             }
         }
