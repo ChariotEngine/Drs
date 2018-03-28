@@ -364,6 +364,38 @@ impl DrsFile {
     }
 }
 
+pub struct DrsMetadataTable {
+    pub entries: Vec<DrsTableEntry>,
+    pub contents: Vec<DrsFileContents>,
+    index_map: HashMap<u32, usize>,
+}
+
+impl DrsMetadataTable {
+    pub fn new(drs_file: DrsFile) -> DrsMetadataTable {
+        let (entries, contents): (Vec<_>, Vec<_>) = drs_file.tables.into_iter()
+            .flat_map(|table| table.entries.into_iter().zip(table.contents.into_iter()))
+            .unzip();
+
+        let mut index_map = HashMap::new();
+        for i in 0..entries.len() {
+            index_map.insert(entries[i].file_id, i);
+        }
+
+        DrsMetadataTable {
+            entries,
+            contents,
+            index_map,
+        }
+    }
+
+    pub fn get_file_contents(&self, file_id: u32) -> Option<&DrsFileContents> {
+        match self.index_map.get(&file_id) {
+            Some(index) => Some(&self.contents[*index]),
+            None => None,
+        }
+    }
+}
+
 fn validate_str(file_name: &Path, bytes: &[u8], expected: &'static str) -> Result<()> {
     if bytes.len() < expected.len() || &bytes[0..expected.len()] != expected.as_bytes() {
         return Err(ErrorKind::InvalidDrs(file_name.into()).into());
