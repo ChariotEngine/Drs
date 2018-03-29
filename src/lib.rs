@@ -33,5 +33,6 @@ mod error;
 
 pub use drs::DrsFile;
 pub use drs::DrsFileType;
+pub use drs::DrsMetadataTable;
 
 pub use error::{ChainErr, Error, ErrorKind, Result};
